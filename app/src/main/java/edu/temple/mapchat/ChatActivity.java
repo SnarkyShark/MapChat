@@ -8,7 +8,6 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 
@@ -21,6 +20,7 @@ public class ChatActivity extends AppCompatActivity {
     Button sendButton;
 
     // important stored values
+    String friendName;
     ArrayList<String> messages;
 
 
@@ -31,7 +31,7 @@ public class ChatActivity extends AppCompatActivity {
 
         // intercept data from MainActivity
         Intent intent = getIntent();
-        String friendName = intent.getStringExtra(MainActivity.EXTRA_FRIEND);
+        friendName = intent.getStringExtra(MainActivity.EXTRA_FRIEND);
 
         setTitle(friendName);
 
@@ -63,7 +63,7 @@ public class ChatActivity extends AppCompatActivity {
     private void sendMessage() {
         String message = editText.getText().toString();
         editText.getText().clear();
-        messages.add(message);
+        messages.add("me: " + message);
     }
 
 }
