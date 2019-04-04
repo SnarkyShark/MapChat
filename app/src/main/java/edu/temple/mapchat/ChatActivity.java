@@ -22,6 +22,7 @@ public class ChatActivity extends AppCompatActivity {
     // important stored values
     String friendName;
     ArrayList<String> messages;
+    ArrayAdapter<String> adapter;
 
 
     @Override
@@ -44,7 +45,7 @@ public class ChatActivity extends AppCompatActivity {
         messages = new ArrayList<>();
 
         // list of messages
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+        adapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_list_item_1, messages);
         chatListView.setAdapter(adapter);
 
@@ -64,6 +65,8 @@ public class ChatActivity extends AppCompatActivity {
         String message = editText.getText().toString();
         editText.getText().clear();
         messages.add("me: " + message);
+        adapter.notifyDataSetChanged();
+        chatListView.smoothScrollToPosition(messages.size() - 1);
     }
 
 }

@@ -26,6 +26,7 @@
             android:layout_weight=".7"
             android:ems="10"
             android:fontFamily="monospace"
+            android:maxLength="160"
             android:hint="message"
             android:inputType="textPersonName" />
 
