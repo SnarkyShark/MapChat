@@ -10,7 +10,10 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <service
-            android:name=".MyMessagingService">
+            android:name=".KeyService"
+            android:enabled="true"
+            android:exported="true"></service>
+        <service android:name=".MyMessagingService">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
