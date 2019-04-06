@@ -1,9 +1,14 @@
 package edu.temple.mapchat;
 
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.NfcEvent;
 import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -16,11 +21,14 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 
 import static android.provider.AlarmClock.EXTRA_MESSAGE;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback {
 
     // on screen elements
     EditText usernameEditText;
@@ -36,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     // service
     KeyService mService;
     boolean mBound = false;
+
+    // NFC Beam
+    NfcAdapter nfcAdapter;
+    private PendingIntent mPendingIntent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +77,14 @@ public class MainActivity extends AppCompatActivity {
         listView.setAdapter(adapter);
         listView.setOnItemClickListener(messageClickedHandler);
         getFriends();
+
+        // Android Beam
+        Intent nfcIntent = new Intent(this, MainActivity.class);
+        nfcIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        mPendingIntent = PendingIntent.getActivity(this, 0, nfcIntent, 0);
+
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this);
+        nfcAdapter.setNdefPushMessageCallback(this, this);
     }
 
     /**
@@ -76,8 +96,7 @@ public class MainActivity extends AppCompatActivity {
         if (username.compareTo("") == 0)
             username = "default";
         setTitle("username: " + username);
-        // TODO: uncomment this
-        //mService.genMyKeyPair(username);
+        mService.genMyKeyPair(username);
     }
 
     /**
@@ -118,6 +137,86 @@ public class MainActivity extends AppCompatActivity {
     };
 
     /**
+     * Beam Stuff
+     */
+
+    // Set Beam Payload
+    @Override
+    public NdefMessage createNdefMessage(NfcEvent event) {
+        String payload = setKey();
+        NdefRecord record = NdefRecord.createTextRecord(null, payload);
+        return new NdefMessage(new NdefRecord[]{record});
+    }
+
+    private String setKey() {
+        String pubKey = mService.getMyPublicKey();
+        if(pubKey.equals("")){
+            Log.d("SEND EMPTY KEY", "KEY WAS EMPTY!");
+            return "";
+        }
+        else{
+            return "{\"user\":\""+ username +"\",\"key\":\""+ pubKey +"\"}";
+            //Log.d("SENT KEY PAYLOAD", payload);
+        }
+    }
+
+    // Accept Beam Payload
+    void processIntent(Intent intent) {
+        String payload = new String(
+                ((NdefMessage) intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)[0])
+                        .getRecords()[0]
+                        .getPayload());
+        //Lop off the 'en' language code.
+        String jsonString = payload.substring(3);
+        if(jsonString.equals("")){
+            Log.d("Message Recieved?", "Message was empty!");
+        }
+        else {
+            try {
+                JSONObject json = new JSONObject(jsonString);
+                String owner = json.getString("user");
+                String pemKey = json.getString("key");
+
+                if(mBound) {
+                    mService.storePublicKey(owner, pemKey);
+                    Log.e(" beamtrack", "key stored successfully");
+                }
+                else
+                    Log.e(" beamtrack", "key not stored!");
+
+            } catch (JSONException e) {
+                Log.e("JSON Exception", "Convert problem", e);
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.e( " beamtrack", "We resumed");
+
+        // Get the intent from Beam
+        if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(getIntent().getAction())) {
+            Log.e( " beamtrack", "We discovered an NDEF");
+            processIntent(getIntent());
+        }
+        nfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        nfcAdapter.disableForegroundDispatch(this);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);  // look for new intents
+    }
+
+    /**
      * Service Stuff
      */
 
@@ -151,7 +250,7 @@ public class MainActivity extends AppCompatActivity {
 
             // TODO: Remove later
             // paul has a key already
-            mService.testGiveThisManAKey("paul");
+            //mService.testGiveThisManAKey("paul");
         }
 
         @Override
