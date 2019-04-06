@@ -19,6 +19,7 @@
             android:layout_height="match_parent"
             android:layout_weight=".7"
             android:ems="10"
+            android:maxLength="16"
             android:fontFamily="monospace"
             android:hint="username"
             android:inputType="textPersonName" />

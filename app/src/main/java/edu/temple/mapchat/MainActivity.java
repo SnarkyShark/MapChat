@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
@@ -30,15 +31,17 @@ import static android.provider.AlarmClock.EXTRA_MESSAGE;
 
 public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback {
 
-    // on screen elements
-    EditText usernameEditText;
-    Button usernameButton;
+    // list of friends
     ListView listView;
-
-    // important stored values
-    String username;
     ArrayList<String> friends;
     public static final String EXTRA_FRIEND = "";
+
+    // username
+    String username;
+    EditText usernameEditText;
+    Button usernameButton;
+    private SharedPreferences sharedPref;
+    private static final String USER_PREF_KEY = "USERNAME_PREF";
     Context context;
 
     // service
@@ -61,9 +64,10 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
         // initialize values
         friends = new ArrayList<>();
-        context = this;
+        sharedPref = getSharedPreferences("myMapChatApp", Context.MODE_PRIVATE);
 
-        // set username
+        // check/set username
+        checkUsername();
         usernameButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -88,15 +92,42 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     }
 
     /**
+     * Check username
      * Set username
      * Generate public & private keys
      */
+
+    private void checkUsername() {
+        String storedUsername = sharedPref.getString(USER_PREF_KEY, null);
+        if(storedUsername != null) {
+            username = storedUsername;
+            setTitle("username: " + username);
+        }
+        else
+            Toast.makeText(this, "please enter a username", Toast.LENGTH_SHORT).show();
+        // TODO: post current location
+    }
+
     private void setUsername() {
+        boolean usernameReady;
+
+        // generate new username
         username = usernameEditText.getText().toString();
-        if (username.compareTo("") == 0)
-            username = "default";
-        setTitle("username: " + username);
-        mService.genMyKeyPair(username);
+        usernameReady = username.compareTo("") != 0;
+
+        if (usernameReady) { // generate keypair
+            Log.e( "usertrack", "username is not 0");
+            mService.genMyKeyPair(username);
+            usernameReady = sharedPref.edit().putString(USER_PREF_KEY, username).commit();
+        }
+
+        if (usernameReady) {
+            setTitle("username: " + username);
+        }
+        else {
+            Toast.makeText(this, "please enter a valid username", Toast.LENGTH_SHORT).show();
+            Log.e( "usertrack", "username wasn't saved to shared preferences");
+        }// TODO: post current location
     }
 
     /**
@@ -128,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                     startActivity(intent);
                 }
                 else {
-                    Toast.makeText(context, "You don't have " + friendName + "'s key!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(parent.getContext(), "You don't have " + friendName + "'s key!", Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
