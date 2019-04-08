@@ -11,6 +11,7 @@ import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.NfcEvent;
 import android.os.IBinder;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -22,6 +23,16 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -29,7 +40,7 @@ import java.util.ArrayList;
 
 import static android.provider.AlarmClock.EXTRA_MESSAGE;
 
-public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback {
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, NfcAdapter.CreateNdefMessageCallback {
 
     // list of friends
     ListView listView;
@@ -43,6 +54,9 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     private SharedPreferences sharedPref;
     private static final String USER_PREF_KEY = "USERNAME_PREF";
     Context context;
+
+    // map
+    private GoogleMap theMap;
 
     // service
     KeyService mService;
@@ -74,6 +88,12 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 setUsername();
             }
         });
+
+        // map
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        SupportMapFragment mapFragment = new SupportMapFragment();
+        transaction.replace(R.id.mapView, mapFragment).commit();
+        mapFragment.getMapAsync(MainActivity.this);
 
         // list of friends
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
@@ -128,6 +148,18 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             Toast.makeText(this, "please enter a valid username", Toast.LENGTH_SHORT).show();
             Log.e( "usertrack", "username wasn't saved to shared preferences");
         }// TODO: post current location
+    }
+
+    /**
+     * Google Map View
+     */
+    @Override
+    public void onMapReady(GoogleMap map) {
+        theMap = map;
+        // Add a marker in Sydney, Australia, and move the camera.
+        LatLng sydney = new LatLng(-34, 151);
+        theMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
+        theMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
     }
 
     /**

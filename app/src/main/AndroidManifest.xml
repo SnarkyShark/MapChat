@@ -26,7 +26,9 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBEwe-JozbnBfU9_uSa_a2MT16p439HD_w"/>
         <activity
             android:name=".ChatActivity"
             android:label="@string/title_activity_chat"
