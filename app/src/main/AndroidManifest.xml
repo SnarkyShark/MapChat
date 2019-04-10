@@ -3,8 +3,8 @@
     package="edu.temple.mapchat">
 
     <uses-permission android:name="android.permission.NFC" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET"/>
 
     <uses-feature
         android:name="android.hardware.nfc"
@@ -28,7 +28,7 @@
         </service>
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBEwe-JozbnBfU9_uSa_a2MT16p439HD_w"/>
+            android:value="@string/google_maps_api_key"/>
         <activity
             android:name=".ChatActivity"
             android:label="@string/title_activity_chat"
