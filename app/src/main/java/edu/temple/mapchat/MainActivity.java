@@ -17,6 +17,7 @@ import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.NfcEvent;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -38,6 +39,7 @@ import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonArrayRequest;
+import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -56,6 +58,8 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static android.provider.AlarmClock.EXTRA_MESSAGE;
 
@@ -73,8 +77,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private LocationManager lm;
     private LocationListener ll;
     private GoogleMap mMap;
-    private Marker lastMarker;
     private Location mLocation;
+    private HashMap<String,Marker> mMarkers = new HashMap<>();
     private static final String LOC_LAT = "LAST_LAT";
     private static final String LOC_LNG = "LAST_LNG";
     private static final String LOC_PRO = "LAST_PRO";
@@ -141,9 +145,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             mLocation.setLatitude(Double.parseDouble(lat));
             mLocation.setLongitude(Double.parseDouble(lon));
         }
-        if (mLocation != null && mMap != null)
-            displayYourPin(mLocation);
-
 
         // list of friends
         friendNamesAdapter = new ArrayAdapter<>(this,
@@ -153,7 +154,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         // api
         queue = Volley.newRequestQueue(this);
-        //get();
+
+        // update partnermap & listview every 30 seconds
+        final Handler handler = new Handler();
+        final int delay = 30000; //milliseconds
+
+        handler.postDelayed(new Runnable(){
+            public void run(){
+                get();
+                handler.postDelayed(this, delay);
+            }
+        }, delay);
 
         // Android Beam
         Intent nfcIntent = new Intent(this, MainActivity.class);
@@ -173,7 +184,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         String storedUsername = sharedPref.getString(USER_PREF_KEY, null);
         if(storedUsername != null) {
             username = storedUsername;
-            setTitle("username: " + username);
+            post();
         }
         else
             Toast.makeText(this, "please enter a username", Toast.LENGTH_SHORT).show();
@@ -195,11 +206,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         if (usernameReady) {
             setTitle("username: " + username);
+            post();
         }
         else {
             Toast.makeText(this, "please enter a valid username", Toast.LENGTH_SHORT).show();
             Log.e( "usertrack", "username wasn't saved to shared preferences");
-        }// TODO: post current location
+        }
     }
 
     /**
@@ -236,18 +248,51 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                         }
                         Log.e(" friendtest", "successful volley request");
-                        convertFriends(len);
+
+                        updateFriendList(len);
+                        updateMarkerList(len);
                     }
                 }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
                 Log.e(" friendtest", "volley request failed");
+                if(mLocation != null) {
+                    LatLng latLng = new LatLng(mLocation.getLatitude(), mLocation.getLongitude());
+                    CameraUpdate cameraUpdate = CameraUpdateFactory
+                            .newLatLngZoom(latLng, 14);
+
+                    mMap.moveCamera(cameraUpdate);
+                }
             }
         });
         queue.add(getRequest);
     }
 
-    public void convertFriends(int len) {
+    public void updateMarkerList(int len) {
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for (int i=0; i<len; i++) {
+            String name = friends.get(i).toString();
+            Marker marker = mMarkers.get(name);
+            if(marker == null) {
+                marker = mMap.addMarker(new MarkerOptions().title(name)
+                        .position(friends.get(i).getPosition()));
+                mMarkers.put(name, marker);
+            }
+            else{
+                marker.remove();
+                marker = mMap.addMarker(new MarkerOptions().title(name)
+                        .position(friends.get(i).getPosition()));
+                mMarkers.put(name, marker);
+            }
+            builder.include(marker.getPosition());
+        }
+        LatLngBounds bounds = builder.build();
+        int padding = 40;
+        CameraUpdate cu = CameraUpdateFactory.newLatLngBounds(bounds, padding);
+        mMap.animateCamera(cu);
+    }
+
+    public void updateFriendList(int len) {
         try {   // convert Friend arraylist to String arraylist
             friendNames.clear();
             Collections.sort(friends);
@@ -262,7 +307,38 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void post() {
+        Log.d("Post stuff", username + ", " + mLocation);
+        if(username == null || username.equals("") || mLocation == null){
+            Log.e(" posttest", "values were null");
+            return;
+        }
 
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, postPosUrl, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                Log.d("Volley Result", ""+ response);
+                Log.e(" posttest", "got a response");
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                error.printStackTrace();
+                Log.e(" posttest", "got a error response");
+            }
+        }){
+
+            @Override
+            protected Map<String, String> getParams() {
+                Map<String, String> postMap = new HashMap<>();
+                Log.e(" posttest", "tried to post");
+                postMap.put("user", username);
+                postMap.put("latitude", "" + mLocation.getLatitude());
+                postMap.put("longitude", "" + mLocation.getLongitude());
+                return postMap;
+            }
+        };
+        Volley.newRequestQueue(this).add(stringRequest);
+        get();
     }
 
     /**
@@ -276,7 +352,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onLocationChanged(Location location) {
                 Log.e( "marktrack", "location changed");
                 mLocation = location;
-                displayYourPin(location);
             }
             @Override
             public void onStatusChanged(String provider, int status, Bundle extras) {}
@@ -285,28 +360,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onProviderDisabled(String provider) { }
         };
-    }
-
-    private void displayYourPin(Location location) {
-        LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-        if (lastMarker != null) {
-            lastMarker.setPosition(latLng);
-        }
-        else {
-            MarkerOptions markerOptions = (new MarkerOptions())
-                    .position(latLng)
-                    .title("You");
-
-            lastMarker = mMap.addMarker(markerOptions);
-            Log.e( "marktrack", "added a marker");
-
-        }
-
-        CameraUpdate cameraUpdate = CameraUpdateFactory
-                .newLatLngZoom(lastMarker.getPosition(), 14);
-
-        mMap.moveCamera(cameraUpdate);
-        Log.e( "marktrack", "tried to do camera stuff");
     }
 
     @Override
