@@ -34,6 +34,7 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import com.android.volley.AuthFailureError;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
@@ -51,6 +52,10 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.iid.InstanceIdResult;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -61,8 +66,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static android.provider.AlarmClock.EXTRA_MESSAGE;
-
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, NfcAdapter.CreateNdefMessageCallback {
 
     // username
@@ -71,7 +74,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     Button usernameButton;
     private SharedPreferences sharedPref;
     private static final String USER_PREF_KEY = "USERNAME_PREF";
-    Context context;
 
     // map
     private LocationManager lm;
@@ -87,21 +89,27 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     ListView listView;
     ArrayAdapter<String> friendNamesAdapter;
     ArrayList<String> friendNames;
-    public static final String EXTRA_FRIEND = "";
+    public static final String EXTRA_FRIEND = "FRIEND_EXTRA";
 
     // api
     private RequestQueue queue;
     ArrayList<Friend> friends;
     private String getFriendsUrl = "https://kamorris.com/lab/get_locations.php";
     private String postPosUrl = "https://kamorris.com/lab/register_location.php";
+    private String postRegisterURL = "https://kamorris.com/lab/fcm_register.php";
 
     // Android Beam
     NfcAdapter nfcAdapter;
     private PendingIntent mPendingIntent;
 
-    // service
+    // key service
     KeyService mService;
     boolean mBound = false;
+
+    // fcm
+    private String mToken;
+    public static final String USERNAME_EXTRA = "USERNAME_EXTRA";
+    public static final String CHANNEL_ID = "CHANNEL_ID";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,7 +131,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         usernameButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                setUsername();
+                //setUsername();
+                postRegister(); // TODO: set username & don't post here
             }
         });
 
@@ -173,6 +182,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         nfcAdapter.setNdefPushMessageCallback(this, this);
+
+        // fcm
+        FirebaseInstanceId.getInstance().getInstanceId()
+                .addOnCompleteListener(new OnCompleteListener<InstanceIdResult>() {
+                    @Override
+                    public void onComplete(@NonNull Task<InstanceIdResult> task) {
+                        if (!task.isSuccessful()) {
+                            Log.w("tokentrack", "getInstanceId failed", task.getException());
+                            return;
+                        }
+                        // Get new Instance ID token
+                        String token = task.getResult().getToken();
+                        // Log and toast
+                        Log.d("tokentrack", token);
+                        mToken = token;
+                    }
+                });
     }
 
     /**
@@ -184,11 +210,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         String storedUsername = sharedPref.getString(USER_PREF_KEY, null);
         if(storedUsername != null) {
             username = storedUsername;
+            setTitle("username: " + username);
             post();
         }
         else
             Toast.makeText(this, "please enter a username", Toast.LENGTH_SHORT).show();
-        // TODO: post current location
     }
 
     private void setUsername() {
@@ -207,6 +233,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (usernameReady) {
             setTitle("username: " + username);
             post();
+            postRegister();
         }
         else {
             Toast.makeText(this, "please enter a valid username", Toast.LENGTH_SHORT).show();
@@ -341,6 +368,37 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         get();
     }
 
+    // Post for fcm
+    private void postRegister(){
+        Log.d("regtrack", "username: " + username + ", mToken: " + mToken);
+        if(username == null || mToken == null){
+            return;
+        }
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, postRegisterURL, new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                Log.d("regtrack", "Volley Response: " + response);
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                error.printStackTrace(); //log the error resulting from the request for diagnosis/debugging
+                Log.d("regtrack", "Volley Error: " + error);
+            }
+        }){
+
+            @Override
+            protected Map<String, String> getParams() throws AuthFailureError {
+                Map<String, String> postMap = new HashMap<>();
+                postMap.put("user", username);
+                postMap.put("token", ""+ mToken);
+                return postMap;
+            }
+        };
+        Volley.newRequestQueue(this).add(stringRequest);
+        Log.d("regtrack", "added the request to the queue");
+    }
+
     /**
      * Google Map View
      */
@@ -410,6 +468,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             try {
                 if (mService.getPublicKey(friendName) != null) {
                     intent.putExtra(EXTRA_FRIEND, friendName);
+                    intent.putExtra(USERNAME_EXTRA, username);
                     startActivity(intent);
                 }
                 else {
@@ -515,7 +574,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     /**
-     * Service Stuff
+     * Key Service
      */
 
     @Override
@@ -545,10 +604,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             mService = binder.getService();
             mBound = true;
             Log.e(" keytrack", "connected to the service");
-
-            // TODO: Remove later
-            // paul has a key already
-            //mService.testGiveThisManAKey("paul");
         }
 
         @Override
